@@ -3,6 +3,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AvatarGenerator } from "random-avatar-generator";
 import Link from "next/link";
+import { auth, firestore } from "@/lib/firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 
 function page() {
   const [name, setName] = useState("");
@@ -23,20 +26,73 @@ function page() {
   const handleRefershAvatar = () => {
     setAvatarUrl(generateRandomAvatar());
   };
+
   useEffect(() => {
     setAvatarUrl(generateRandomAvatar());
   }, []);
 
+  const validate = () => {
+    const emailRegex = /^((?!\.)[\w\-_.]*[^.])(@\w+)(\.\w+(\.\w+)?[^.\W])$/gm;
+    const newErrors = {};
+
+    if (!name.trim()) {
+      newErrors.name = "Name is required";
+    }
+
+    if (!email.trim() || !emailRegex.test(email)) {
+      newErrors.email = "Email is invalid";
+    }
+
+    if (password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
+    }
+
+    if (password !== confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (!validate()) {
+        setLoading(false);
+        return;
+      }
+      const userCrede = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCrede.user;
+
+      const docRef = doc(firestore, "users", user.uid);
+      await setDoc(docRef, {
+        name,
+        email,
+        avatarUrl,
+      });
+
+      router.push("/");
+      setErrors({});
+    } catch (error) {
+      console.log(error);
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="flex justify-center items-center h-screen p-10 m-2">
-      {/* form */}
-
       <form className="space-y-4 w-full max-w-2xl shadow-lg p-10">
         <h1 className="text-xl text-center font-semibold text-[#0b3a65ff]">
           Chat<span className="font-bold text-[#eeab63ff]">2</span>Chat
         </h1>
 
-        {/* display the avatar */}
         <div className="flex items-center space-y-2 justify-between border border=gray-200 p-2">
           <img
             src={avatarUrl}
@@ -52,7 +108,6 @@ function page() {
           </button>
         </div>
 
-        {/* name */}
         <div>
           <label className="label">
             <span className="text-base label-text">Name</span>
@@ -64,12 +119,11 @@ function page() {
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          {errors.username && (
-            <span className="text-sm text-red-500">{errors.username}</span>
+          {errors.name && (
+            <span className="text-sm text-red-500">{errors.name}</span>
           )}
         </div>
 
-        {/* email */}
         <div>
           <label className="label">
             <span className="text-base label-text">Email</span>
@@ -86,7 +140,6 @@ function page() {
           )}
         </div>
 
-        {/* password */}
         <div>
           <label className="label">
             <span className="text-base label-text">Password</span>
@@ -95,7 +148,7 @@ function page() {
             type="password"
             placeholder="Enter your password"
             className="w-full input input-bordered"
-            value={email}
+            value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
           {errors.password && (
@@ -103,7 +156,6 @@ function page() {
           )}
         </div>
 
-        {/* confirm password */}
         <div>
           <label className="label">
             <span className="text-base label-text">Confirm Password</span>
@@ -112,7 +164,7 @@ function page() {
             type="password"
             placeholder="Confirm your password"
             className="w-full input input-bordered"
-            value={email}
+            value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
           {errors.confirmPassword && (
@@ -126,6 +178,7 @@ function page() {
           <button
             type="submit"
             className="btn btn-block bg-[#0b3a65ff] text-white"
+            onClick={handleSubmit}
           >
             {loading ? (
               <span className="loading loading-spinner loading-sm"></span>
